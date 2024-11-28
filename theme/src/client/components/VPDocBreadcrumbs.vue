@@ -86,6 +86,7 @@ function resolveSidebar(
       >
         <VPLink :href="link" class="breadcrumb" :class="{ current }" property="item" typeof="WebPage" :text="text" />
         <span v-if="index !== breadcrumbList.length - 1" class="vpi-chevron-right" />
+        <meta property="name" :content="text">
         <meta property="position" :content="`${index + 1}`">
       </li>
     </ol>
@@ -98,6 +99,12 @@ function resolveSidebar(
   margin-bottom: 2rem;
   border-left: solid 2px var(--vp-c-brand-1);
   transition: border-left var(--vp-t-color);
+}
+
+@media print {
+  .vp-breadcrumb {
+    display: none;
+  }
 }
 
 .vp-breadcrumb ol {

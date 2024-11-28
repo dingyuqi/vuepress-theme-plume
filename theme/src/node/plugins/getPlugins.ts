@@ -1,5 +1,6 @@
 import type { App, PluginConfig } from 'vuepress/core'
-import type { PlumeThemePluginOptions } from '../../shared/index.js'
+import type { PlumeThemeLocaleOptions, PlumeThemePluginOptions } from '../../shared/index.js'
+import { isPlainObject } from '@vuepress/helper'
 import { cachePlugin } from '@vuepress/plugin-cache'
 import { commentPlugin } from '@vuepress/plugin-comment'
 import { docsearchPlugin } from '@vuepress/plugin-docsearch'
@@ -10,8 +11,8 @@ import { markdownMathPlugin } from '@vuepress/plugin-markdown-math'
 import { nprogressPlugin } from '@vuepress/plugin-nprogress'
 import { photoSwipePlugin } from '@vuepress/plugin-photo-swipe'
 import { readingTimePlugin } from '@vuepress/plugin-reading-time'
-import { seoPlugin } from '@vuepress/plugin-seo'
-import { sitemapPlugin } from '@vuepress/plugin-sitemap'
+import { seoPlugin, type SeoPluginOptions } from '@vuepress/plugin-seo'
+import { sitemapPlugin, type SitemapPluginOptions } from '@vuepress/plugin-sitemap'
 import { watermarkPlugin } from '@vuepress/plugin-watermark'
 import { contentUpdatePlugin } from '@vuepress-plume/plugin-content-update'
 import { fontsPlugin } from '@vuepress-plume/plugin-fonts'
@@ -21,8 +22,6 @@ import { type MarkdownEnhancePluginOptions, mdEnhancePlugin } from 'vuepress-plu
 import { markdownPowerPlugin } from 'vuepress-plugin-md-power'
 import { resolveDocsearchOptions, resolveSearchOptions } from '../config/index.js'
 import { deleteAttrs } from '../utils/index.js'
-import { customContainerPlugins } from './containerPlugins.js'
-import { markdownTitlePlugin } from './markdown-title.js'
 
 export interface SetupPluginOptions {
   app: App
@@ -31,21 +30,21 @@ export interface SetupPluginOptions {
   cache?: false | 'memory' | 'filesystem'
 }
 
-export function getPlugins({
-  app,
-  pluginOptions,
-  hostname,
-  cache,
-}: SetupPluginOptions): PluginConfig {
+export function getPlugins(
+  options: PlumeThemeLocaleOptions,
+  {
+    app,
+    pluginOptions,
+    hostname,
+    cache,
+  }: SetupPluginOptions,
+): PluginConfig {
   const isProd = app.env.isBuild
 
   const plugins: PluginConfig = [
-    markdownTitlePlugin(),
     fontsPlugin(),
     contentUpdatePlugin(),
     markdownHintPlugin({ hint: true, alert: true, injectStyles: false }),
-
-    ...customContainerPlugins,
   ]
 
   if (pluginOptions.readingTime !== false) {
@@ -66,10 +65,25 @@ export function getPlugins({
   }
 
   if (pluginOptions.git ?? isProd) {
+    const excludes = ['home', 'friends', 'page', 'custom', false]
+    const changelogOptions = isPlainObject(options.changelog) ? options.changelog : {}
     plugins.push(gitPlugin({
-      createdTime: true,
-      updatedTime: true,
-      contributors: true,
+      createdTime: false,
+      updatedTime: options.lastUpdated !== false,
+      contributors: isPlainObject(options.contributors) || options.contributors === true
+        ? {
+            avatar: true,
+            ...options.contributors === true ? {} : options.contributors,
+          }
+        : false,
+      changelog: options.changelog && (options.docsRepo || changelogOptions.repoUrl)
+        ? { repoUrl: options.docsRepo, ...changelogOptions }
+        : false,
+      filter(page) {
+        if (page.frontmatter.home || excludes.includes(page.frontmatter.pageLayout as string))
+          return false
+        return true
+      },
     }))
   }
 
@@ -132,7 +146,7 @@ export function getPlugins({
     plugins.push(watermarkPlugin({
       delay: 300,
       enabled: true,
-      ...typeof pluginOptions.watermark === 'object' ? pluginOptions.watermark : {},
+      ...isPlainObject(pluginOptions.watermark) ? pluginOptions.watermark : {},
     }))
   }
 
@@ -140,12 +154,19 @@ export function getPlugins({
     plugins.push(commentPlugin(pluginOptions.comment))
   }
 
-  if (pluginOptions.sitemap !== false && hostname && isProd) {
-    plugins.push(sitemapPlugin({ hostname }))
+  if (pluginOptions.sitemap !== false && isProd) {
+    const sitemapOptions = isPlainObject(pluginOptions.sitemap) ? pluginOptions.sitemap : {}
+    sitemapOptions.hostname ||= hostname
+
+    if (sitemapOptions.hostname)
+      plugins.push(sitemapPlugin(sitemapOptions as SitemapPluginOptions))
   }
 
   if (pluginOptions.seo !== false && hostname && isProd) {
-    plugins.push(seoPlugin({ hostname }))
+    const seoOptions = isPlainObject(pluginOptions.seo) ? pluginOptions.seo : {}
+    seoOptions.hostname ||= hostname
+    if (seoOptions.hostname)
+      plugins.push(seoPlugin(seoOptions as SeoPluginOptions))
   }
 
   if (cache !== false) {
